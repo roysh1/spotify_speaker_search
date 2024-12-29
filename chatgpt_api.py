@@ -28,7 +28,7 @@ def get_guest_speaker(description):
     try:
         guests_dict = json.loads(guests)
     except Exception as e:
-        return {"guests": "No guests", "info": ""}
+        return {"guests": "No guest", "info": ""}
     return guests_dict
 
 def get_host(description):
