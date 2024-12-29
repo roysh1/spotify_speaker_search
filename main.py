@@ -2,6 +2,7 @@ import csv
 import os
 import spotify_api
 import chatgpt_api
+from concurrent.futures import ThreadPoolExecutor
 
 
 def export_to_csv(episodes):
@@ -16,6 +17,52 @@ def export_to_csv(episodes):
         print("No episodes with guests were found.")
 
 
+def process_episode(item, query):
+    """
+    Process a single episode: get guest speakers, summarize content, and extract the host.
+    Returns a dictionary with the processed results or None if irrelevant.
+    """
+    guests_dict = chatgpt_api.get_guest_speaker(item["description"])
+    if guests_dict["guests"] == "No guest":
+        return None
+
+    summary = chatgpt_api.summarize_episode_content(item["description"], query)
+    if summary == "irrelevant":
+        return None
+
+    host = chatgpt_api.get_host(item["show"]["description"])
+    return {
+        "title": item["name"],
+        "podcast": item["show"]["name"],
+        "summary": summary,
+        "host": host,
+        "guests": guests_dict["guests"],
+        "guest_info": guests_dict["info"],
+        "url": item["external_urls"]["spotify"],
+        "date": item["release_date"]
+    }
+
+def process_episodes_multi_threaded(items, query):
+    """
+    Multi-threaded processing of episodes.
+    Returns a list of processed episodes.
+    """
+    processed_results = []
+
+    with ThreadPoolExecutor(max_workers=50) as executor:
+        futures = [executor.submit(process_episode, item, query) for item in items]
+        for future in futures:
+            try:
+                result = future.result()
+                if result:
+                    processed_results.append(result)
+            except Exception as e:
+                print(f"Error processing episode: {e}")
+
+    return processed_results
+
+
+
 def main():
     # User query input
     query = input("Enter your search query: ")
@@ -25,30 +72,10 @@ def main():
     client_secret = os.getenv("SPOTIFY_CLIENT_SECRET")
     access_token = spotify_api.get_spotify_access_token(client_id, client_secret)
     
-    items = spotify_api.search_spotify_podcasts(10, access_token)
+    items = spotify_api.search_spotify_podcasts(query, 2, access_token)
+    processed_episodes = process_episodes_multi_threaded(items, query)
 
-    episodes = []
-    for item in items:
-        episode = spotify_api.get_spotify_episode(item["id"], access_token)
-        guests_dict = chatgpt_api.get_guest_speaker(episode["description"])
-        if guests_dict["guests"] == "No guest":
-            continue
-        summary = chatgpt_api.summarize_episode_content(episode["description"], query)
-        if summary == "irrelevant":
-            continue
-        host = chatgpt_api.get_host(episode["show"]["description"])
-        episodes.append({
-            "title": episode["name"],
-            "podcast": episode["show"]["name"],
-            "summary": summary,
-            "host": host,
-            "guests": guests_dict["guests"],
-            "guest_info": guests_dict["info"],
-            "url": episode["external_urls"]["spotify"],
-            "date": episode["release_date"]
-            })
-
-    export_to_csv(episodes)
+    export_to_csv(processed_episodes)
 
 
 
