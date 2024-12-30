@@ -3,4 +3,5 @@ In order to use it, get a secret key for both Spotify API and OpenAI API and sav
 - SPOTIFY_CLIENT_ID
 - SPOTIFY_CLIENT_SECRET
 - OPENAI_API_KEY
+
 Then write your search query, and it will export the results into a CSV file with the relevant podcasts and their guests.
